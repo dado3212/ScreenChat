@@ -1,8 +1,20 @@
 # ScreenChat
 
-iOS Tweak for non-jailbroken devices to avoid screenshot detection on Snapchat app
+iOS Tweak for non-jailbroken devices for Snapchat
 
-This is a test, not a project for invading the privacy of users. I am not responsible for any use which can give a user of this.
+###Current features:
+* Block screenshot detection
+* Remove caption character limit
+* Remove timer and timer UI
+
+###Planned features:
+* Saving to camera roll
+
+#####Thanks to
+* Giovanni Di Grezia, whose [code](http://www.xgiovio.com/blog-photos-videos-other/blog/resign-your-ios-ipa-frameworks-and-plugins-included/) served as the basis for the patchapp.sh revisions
+
+
+This is a test, not a project for invading the privacy of users. I am not responsible for any uses of this code.
 
 Requirements
 ============
@@ -10,9 +22,8 @@ Requirements
 * Apple Developer account or certificates
 * XCode with iPhone SDK
 * Decrypted ipa file of the app
-* [optool](https://github.com/alexzielenski/optool/releases)
+* [optool](https://github.com/alexzielenski/optool/files/91118/optool.zip)
 * [theos-jailed] (https://codeload.github.com/BishopFox/theos-jailed/zip/master)
-* iModSign?
 
 How to install
 ============

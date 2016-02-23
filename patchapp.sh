@@ -3,7 +3,7 @@
 #
 # You WILL need to change this
 #
-OPTOOL="/Users/andugu/Developer/optool"
+OPTOOL="/Users/alexbeals/Desktop/ScreenChat-master/optool"
 
 #
 # You shouldn't need to change these unless you have multiple Dev certs
@@ -16,6 +16,7 @@ CODESIGN_NAME=`security dump-keychain login.keychain|grep "$DEV_CERT_NAME"|head 
 TMPDIR=".patchapp.cache"
 TWEAKNAME=`grep TWEAK_NAME Makefile 2>/dev/null | awk '{print $3}'`
 DYLIB=obj/$TWEAKNAME.dylib
+SUFFIX="-"$(uuidgen)
 
 #
 # Usage / syntax
@@ -70,7 +71,7 @@ function setup_environment {
 	APP=${APP##*/}
 	APPDIR=$TMPDIR/Payload/$APP
 	cd "$SAVED_PATH"
-	BUNDLE_ID=`plutil -convert xml1 -o - $APPDIR/Info.plist|grep -A1 CFBundleIdentifier|tail -n1|cut -f2 -d\>|cut -f1 -d\<`-patched
+	BUNDLE_ID=`plutil -convert xml1 -o - $APPDIR/Info.plist|grep -A1 CFBundleIdentifier|tail -n1|cut -f2 -d\>|cut -f1 -d\<`$SUFFIX
 	APP_BINARY=`plutil -convert xml1 -o - $APPDIR/Info.plist|grep -A1 Exec|tail -n1|cut -f2 -d\>|cut -f1 -d\<`
 
 	file "$APPDIR/$APP_BINARY" | grep "universal binary" 2>/dev/null 1>&2
@@ -143,7 +144,7 @@ INFO
 			com.apple.security.application-groups)
 				echo ">>> App Groups:"
 				for group in `dd if=entitlements.xml bs=1 skip=8 2>/dev/null|sed -ne '/application-groups/,/<\/array/p'|grep '<string>' 2>/dev/null`; do #|tail -n1` #|cut -f2 -d\>|cut -f1 -d\<`
-					GROUP_ID=`echo $group | cut -f2 -d\>|cut -f1 -d\<`-patched
+					GROUP_ID=`echo $group | cut -f2 -d\>|cut -f1 -d\<`$SUFFIX
 					echo "    $GROUP_ID"
 				done				
 				;;
@@ -209,7 +210,7 @@ INFO2
 
 	loop=0
 	for group in `dd if=entitlements.xml bs=1 skip=8 2>/dev/null|sed -ne '/application-groups/,/<\/array/p'|grep '<string>' 2>/dev/null`; do #|tail -n1` #|cut -f2 -d\>|cut -f1 -d\<`
-		GROUP_ID=`echo $group | cut -f2 -d\>|cut -f1 -d\<`-patched
+		GROUP_ID=`echo $group | cut -f2 -d\>|cut -f1 -d\<`$SUFFIX
 		if [ $loop == 0 ]; then
 			echo -n "App Groups: "
 		else
@@ -243,28 +244,27 @@ function ipa_patch {
 		exit 1
 	fi
 
-	DEVELOPER_ID=`security dump-keychain login.keychain|grep "iPhone Distribution"|head -n1|cut -f2 -d \(|cut -f1 -d\)`
+	DEVELOPER_ID=`security dump-keychain login.keychain|grep "$DEV_CERT_NAME"|head -n1|cut -f2 -d \(|cut -f1 -d\)`
 	if [ "$?" != "0" ]; then
 		echo "Error getting Apple \"iPhone Developer\" certificate ID."
 		exit 1
 	fi
 
-	# copy the files into the .app folder
+	# copy the files into the .app folder (theos-jailed dependencies)
 	echo '[+] Copying .dylib dependences into "'$TMPDIR/Payload/$APP'"'
 	cp "$DYLIB" $TMPDIR/Payload/$APP/
 	cp PatchApp/CydiaSubstrate $TMPDIR/Payload/$APP/
 	cp PatchApp/cycript/* $TMPDIR/Payload/$APP/
 
-	# sign all of the .dylib files we're injecting into the app
+	cp "$MOBILEPROVISION" "$TMPDIR/Payload/$APP/embedded.mobileprovision"
+
 	echo '[+] Codesigning .dylib dependencies with certificate "'$CODESIGN_NAME'"'
-	for file in "$APPDIR/${DYLIB##*/}" "$APPDIR/CydiaSubstrate" "$APPDIR/ap.dylib" "$APPDIR/cy.dylib" "$APPDIR/readlin.dylib" "$APPDIR/ncur.dylib" "$APPDIR/cycript" "$DYLIB"; do
-		echo '     '$file
-		codesign -fs "$CODESIGN_NAME" "$file" >& /dev/null
-		if [ "$?" != "0" ]; then
-			echo "Codesign failed. Have you ran 'make' yet?"
-			exit 1
-		fi
-	done
+	find -d $TMPDIR/Payload/$APP  \( -name "*.app" -o -name "*.appex" -o -name "*.framework" -o -name "*.dylib" -o -name "*cycript" -o -name "*CydiaSubstrate" -o -name "$DYLIB" \) > directories.txt
+	security cms -D -i "$TMPDIR/Payload/$APP/embedded.mobileprovision" > t_entitlements_full.plist
+	/usr/libexec/PlistBuddy -x -c 'Print:Entitlements' t_entitlements_full.plist > t_entitlements.plist
+	while IFS='' read -r line || [[ -n "$line" ]]; do
+	    /usr/bin/codesign --continue -f -s "$CODESIGN_NAME" --entitlements "t_entitlements.plist"  "$line"
+	done < directories.txt
 
 	# patch the app to load the new .dylib (sames a _backup file)
 	echo '[+] Patching "'$APPDIR/$APP_BINARY'" to load "'${DYLIB##*/}'"'
@@ -279,49 +279,43 @@ function ipa_patch {
 	fi
 	chmod +x "$APPDIR/$APP_BINARY"
 
-	# generate the correct entitlements
-	echo '[+] Generating entitlements.xml for distribution ID '$DEVELOPER_ID
-	cat <<XML > entitlements.xml
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-XML
-	strings "$MOBILEPROVISION" | sed -e '1,/<key>Entitlements<\/key>/d' -e '/<\/dict>/,$d' >> entitlements.xml
-	echo "</dict></plist>" >> entitlements.xml
-
 	# Make sure to sign any Plugins in the app. Do NOT attempt to optimize this, the order is important!
 	echo '[+] Codesigning Plugins and Frameworks with certificate "'$CODESIGN_NAME'"'
 	for file in `ls -1 $APPDIR/PlugIns/com.*/com.*`; do
 		echo -n '     '
-		codesign -fs "$CODESIGN_NAME" --deep --entitlements entitlements.xml $file
+		codesign -fs "$CODESIGN_NAME" --deep --entitlements t_entitlements.plist $file
 	done
 	for file in `ls -d1 $APPDIR/PlugIns/com.*`; do
 		echo -n '     '
-		codesign -fs "$CODESIGN_NAME" --deep --entitlements entitlements.xml $file
+		codesign -fs "$CODESIGN_NAME" --deep --entitlements t_entitlements.plist $file
 	done
 
 	# re-sign Frameworks, too
 	for file in `ls -1 $APPDIR/Frameworks/*`; do
 		echo -n '     '
-		codesign -fs "$CODESIGN_NAME" --entitlements entitlements.xml $file
+		codesign -fs "$CODESIGN_NAME" --entitlements t_entitlements.plist $file
 	done
 
-	# re-sign the .app
+	# re-sign the app
 	echo '[+] Codesigning the patched .app bundle with certificate "'$CODESIGN_NAME'"'
 	cd $TMPDIR/Payload
 	echo -n '     '
-	codesign -fs "$CODESIGN_NAME" --deep --entitlements ../../entitlements.xml $APP
+	codesign -fs "$CODESIGN_NAME" --deep --entitlements ../../t_entitlements.plist $APP
 	if [ "$?" != "0" ]; then
 		cd ..
 		echo "Failed to sign $APP with entitlements.xml. You're on your own, sorry."
 		exit 1
 	fi
 	cd ..
+
+	rm ../directories.txt
+	rm ../t_entitlements.plist
+	rm ../t_entitlements_full.plist
 	
 	# re-pack the .ipa
 	echo '[+] Repacking the .ipa'
 	rm -f "${IPA%*.ipa}-patched.ipa" >/dev/null 2>&1
-	zip -9r "${IPA%*.ipa}-patched.ipa" Payload/ >/dev/null 2>&1
+	zip -qry "${IPA%*.ipa}-patched.ipa" Payload/ >/dev/null 2>&1
 	if [ "$?" != "0" ]; then
 		echo "Failed to compress the app into an .ipa file."
 		exit 1
