@@ -1,9 +1,9 @@
 #!/bin/bash
 
 #
-# You WILL need to change this
+# You shouldn't need to change this
 #
-OPTOOL="/Users/alexbeals/Desktop/ScreenChat-master/optool"
+OPTOOL="./optool"
 
 #
 # You shouldn't need to change these unless you have multiple Dev certs
