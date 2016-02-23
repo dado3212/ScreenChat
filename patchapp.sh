@@ -24,12 +24,13 @@ SUFFIX="-"$(uuidgen)
 function usage {
 	if [ "$2" == "" -o "$1" == "" ]; then
 		cat <<USAGE
-Syntax: $0 <command> </path/to/your/ipa/file.ipa> [/path/to/your/file.mobileprovision]"
+Syntax: $0 <command> </path/to/your/ipa/file.ipa> [/path/to/your/file.mobileprovision | bundle-id]"
 Where 'command' is one of:"
 	info  - Show the information required to create a Provisioning Profile
 	        that matches the specified .ipa file
 	patch - Inject the current Theos tweak into the specified .ipa file.
-	        Requires that you specify a .mobileprovision file.
+	        Requires that you specify a .mobileprovision file or the bundle id
+	        for the provision.
 
 USAGE
 	fi
@@ -89,6 +90,9 @@ function setup_environment {
 function ipa_info {
 
 	setup_environment
+
+	IDENTIFIER=`sed -e "s|\(.*\)\..*|\1|" <<< $BUNDLE_ID`
+	PRODUCTNAME=`sed -e "s|.*\.\(.*\)|\1|" <<< $BUNDLE_ID`
 	
 	cat <<INFO
 
@@ -106,74 +110,23 @@ function ipa_info {
 ==================
 1. Build your Theos tweak if you haven't already done so. Just run "make".
 2. Create a provisioning profile for this app (run "$0 info $IPA" for help)
-3. Run "$0 patch $IPA /path/to/your/file.mobileprovision" to patch the .ipa
+3. Run "$0 patch $IPA $BUNDLE_ID" to patch the .ipa
 4. Install the patched .ipa to your device using XCode 
 
 =====================================
 = Creating the provisioning profile =
 =====================================
-1. Sign into the Apple Member Center: 
-		https://developer.apple.com/membercenter/index.action
-2. Choose "Certificates, Identifiers & Profiles"
-3. From "iOS Apps" choose "Identifiers"
-4. Add a new App ID with the following information:
-	a. For "Explicit App ID" / "Bundle ID" use: $BUNDLE_ID
-	b. Under "App Services" enable the following services:
-
-INFO
-	codesign -d --entitlements - "$APPDIR/$APP_BINARY" > entitlements.xml 2>/dev/null
-	if [ "$?" != "0" ]; then
-		echo "Failed to get entitlements for $APPDIR/$APP_BINARY"
-		exit 1
-	fi
-	for ent in `grep -a '<key>' entitlements.xml`; do
-		entitlement=`echo $ent | cut -f2 -d\> | cut -f1 -d\<`
-		case $entitlement in
-			com.apple.developer.networking.vpn.api)
-				echo ">>> VPN Configuration & Control"
-				;;
-			com.apple.developer.in-app-payments)
-				echo ">>> Apple Pay (requires extra configuration)"
-				;;
-			com.apple.external-accessory.wireless-configuration)
-				echo ">>> Wireless Accessory Configuration"
-				;;
-			com.apple.developer.homekit)
-				echo ">>> HomeKit"
-				;;
-			com.apple.security.application-groups)
-				echo ">>> App Groups:"
-				for group in `dd if=entitlements.xml bs=1 skip=8 2>/dev/null|sed -ne '/application-groups/,/<\/array/p'|grep '<string>' 2>/dev/null`; do #|tail -n1` #|cut -f2 -d\>|cut -f1 -d\<`
-					GROUP_ID=`echo $group | cut -f2 -d\>|cut -f1 -d\<`$SUFFIX
-					echo "    $GROUP_ID"
-				done				
-				;;
-			com.apple.developer.associated-domains)
-				echo ">>> Associated Domains"
-				;;
-			com.apple.developer.healthkit)
-				echo ">>> HealthKit"
-				;;
-			inter-app-audio)
-				echo ">>> Inter-App Audio"
-				;;
-			com.apple.developer.ubiquity*)
-				echo ">>> Passbook"
-				echo ">>> iCloud (requires extra configuration)"
-				echo ">>> Data Protection"
-				;;
-		esac
-	done | tee entitlements.txt
-	cat <<INFO2
-
-5. Add a new Provisioning Profile
-	a. For "type of provisioning profile" choose "iOS App Development"
-	b. For "App ID" choose "$BUNDLE_ID"
-	c. Choose the development cert you want associate with this profile (or "select All")
-	d. "Select All" devices unless you want to choose a specific device
-	e. Give the profile a name, anything will do.
-6. Download the provisioning profile (.mobileprovision file) from the Member Center
-	a. Take note of the path/filename to which the .mobileprovision file is saved.
+1. Open up XCode, and create a new project.
+2. Choose "Master-Detail Application", and click "Next"
+3. For 'Product Name' use: 
+	$PRODUCTNAME
+4. For 'Organization Identifier' use: 
+	$IDENTIFIER
+5. Leave all other fields the way they are, and click "Next", and then "Create" wherever you want to save it.
+6. Under "Deployment Info", change the "Deployment Target" to whatever your device version is (or below it).
+7. In the top bar, where it currently says "iPhone ....", set the device to your current phone (make sure it's plugged in).
+8. Under "Identity", change "Team" to whatever developer account is yours (it can be a free one).
+9. Click "Fix Issue", under where it says "No matching provisioning profiles found".
 
 ==================================================================
 = Installing the provisioning profile on your device using XCode =
@@ -198,28 +151,12 @@ INFO
 = Summary =
 ===========
 Do all of the things mentioned under "What to do now", above.
-Make sure that the provisioning profile contains the correct entitlements (see above).
-Once you've installed the provisioning profile on your device, run the following command:
-    $0 patch $IPA /path/to/your/file.mobileprovision
-
-Bundle ID: $BUNDLE_ID
-Required Entitlements: 
-INFO2
-	cat entitlements.txt
-	exit 0
-
-	loop=0
-	for group in `dd if=entitlements.xml bs=1 skip=8 2>/dev/null|sed -ne '/application-groups/,/<\/array/p'|grep '<string>' 2>/dev/null`; do #|tail -n1` #|cut -f2 -d\>|cut -f1 -d\<`
-		GROUP_ID=`echo $group | cut -f2 -d\>|cut -f1 -d\<`$SUFFIX
-		if [ $loop == 0 ]; then
-			echo -n "App Groups: "
-		else
-			echo -n "            "
-		fi
-		echo $GROUP_ID
-		loop=1
-	done
-	exit 0
+Make sure that you've created the provisioning profile (steps above).
+Run the following command:
+    $0 patch $IPA $BUNDLE_ID
+Install 'provision.mobileprovision' onto your device (steps above).
+Install the patched app onto your device (steps above). 
+INFO
 }
 
 #
@@ -229,13 +166,28 @@ function ipa_patch {
 
 	setup_environment
 
+	# No argument for provision given
 	if [ "$MOBILEPROVISION" == "" ]; then
 		usage
 		exit 1
 	fi
+
+	# File can't be read (try making it)
 	if [ ! -r "$MOBILEPROVISION" ]; then
-		echo "Can't read $MOBILEPROVISION"
-		exit 1
+		# found one
+		if (( `grep -rn ~/Library/MobileDevice/Provisioning\ Profiles -e "$MOBILEPROVISION" | wc -l` > 0)); then
+			echo '[+] Copying provision from provided Bundle ID'
+			cp "`grep -rn ~/Library/MobileDevice/Provisioning\ Profiles -e "$MOBILEPROVISION" | sed -e "s|Binary file \(.*\) matches|\1|"`" "provision.mobileprovision"
+			MOBILEPROVISION=`pwd`"/provision.mobileprovision"
+
+			if [ ! -r "$MOBILEPROVISION" ]; then
+				echo "Can't read $MOBILEPROVISION"
+				exit 1
+			fi
+		else # didn't find one
+			echo "Can't read $MOBILEPROVISION"
+			exit 1
+		fi
 	fi
 
 	if [ ! -x "$OPTOOL" ]; then

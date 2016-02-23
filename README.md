@@ -29,10 +29,10 @@ How to install
 ============
 * Uninstall Snapchat from the iOS device.
 * Extract or download an Snapchat decrypted ipa file.
-* Place an symlink in the project folder named `theos` pointing to the theos-jailed folder you downloaded.
+* Place an symlink in the project folder named `theos` pointing to the theos-jailed folder you downloaded: `ln -s /path/to/theos-jailed/ theos`
 * Run `make package`
 * Run `./patchapp.sh info /path/to/your/file.ipa`
-* Take the information from that and use the Apple Member Center to create a matching Provisionin Profile or create an empty Xcode project and use the Provisionin Profile of the project.
-* Save the Provisioning Profile somewhere on your computer.
-* Run `.patchapp.sh patch /path/to/Snapchat.ipa /path/to/your/file.mobileprovision` to inject the tweak into the .ipa
+* Take the information from that and use XCode to create a Provisioning Profile
+* Run `.patchapp.sh patch /path/to/Snapchat.ipa BUNDLE_ID` to inject the tweak into the .ipa (get the BUNDLE_ID from the info command)
+* Install the .mobileprovision to the device
 * Install the ipa to the device
