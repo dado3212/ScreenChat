@@ -1,9 +1,9 @@
-Package: com.andugu.screenchat
-Name: ScreenChat
+Package: com.hackingdartmouth.snapchatreloaded
+Name: SnapchatReloaded
 Depends: mobilesubstrate
-Version: 0.0.1
+Version: 1.0.0
 Architecture: iphoneos-arm
-Description: An awesome MobileSubstrate tweak!
-Maintainer: andugu
-Author: andugu
+Description: A Snapchat tweak for non-jailbroken users
+Maintainer: Alex Beals <Alex.Beals.18@dartmouth.edu>
+Author: Alex Beals <Alex.Beals.18@dartmouth.edu>
 Section: Tweaks

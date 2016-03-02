@@ -4,9 +4,9 @@ LDFLAGS += -F. -framework Cycript -framework JavaScriptCore -framework Security 
 
 ARCHS = armv7 arm64
 
-TWEAK_NAME = ScreenChat
-ScreenChat_FILES = Tweak.xm fishhook/fishhook.c
-ScreenChat_LDFLAGS += -Wl,-segalign,4000
+TWEAK_NAME = SnapchatReloaded
+SnapchatReloaded_FILES = Tweak.xm fishhook/fishhook.c
+SnapchatReloaded_LDFLAGS += -Wl,-segalign,4000
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 
